@@ -1,5 +1,13 @@
 import streamlit as st
-from openai import OpenAI
+
+try:
+    # OpenAI Python library v1
+    from openai import OpenAI
+    _use_client = True
+except ImportError:  # pragma: no cover - fallback for OpenAI < 1.0
+    import openai
+    OpenAI = None
+    _use_client = False
 
 # Show title and description.
 st.title("📄 Document question answering")
@@ -16,8 +24,13 @@ if not openai_api_key:
     st.info("Please add your OpenAI API key to continue.", icon="🗝️")
 else:
 
-    # Create an OpenAI client.
-    client = OpenAI(api_key=openai_api_key)
+    # Create an OpenAI client. Support both v1 and older versions of the
+    # library so the app works regardless of the installed package version.
+    if _use_client:
+        client = OpenAI(api_key=openai_api_key)
+    else:
+        openai.api_key = openai_api_key
+        client = openai
 
     # Let the user upload a file via `st.file_uploader`.
     uploaded_file = st.file_uploader(
@@ -43,11 +56,18 @@ else:
         ]
 
         # Generate an answer using the OpenAI API.
-        stream = client.chat.completions.create(
-            model="gpt-3.5-turbo",
-            messages=messages,
-            stream=True,
-        )
+        if _use_client:
+            stream = client.chat.completions.create(
+                model="gpt-3.5-turbo",
+                messages=messages,
+                stream=True,
+            )
+        else:
+            stream = client.ChatCompletion.create(
+                model="gpt-3.5-turbo",
+                messages=messages,
+                stream=True,
+            )
 
         # Stream the response to the app using `st.write_stream`.
         st.write_stream(stream)
